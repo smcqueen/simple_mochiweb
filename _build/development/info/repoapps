@@ -1,0 +1,10 @@
+[{kernel,"2.14.1",{[],[]},"/usr/local/lib/erlang/lib/kernel-2.14.1"},
+ {stdlib,"1.17.1",{[kernel],[]},"/usr/local/lib/erlang/lib/stdlib-1.17.1"},
+ {mochiweb_otp,"0.1.0.2",
+               {[kernel,stdlib,mochiweb,inets],[]},
+               "/usr/local/lib/erlang/lib/mochiweb_otp-0.1.0.2"},
+ {eunit,"2.1.5",{[stdlib],[]},"/usr/local/lib/erlang/lib/eunit-2.1.5"},
+ {mochiweb,"138",
+           {[kernel,stdlib,inets],[]},
+           "/usr/local/lib/erlang/lib/mochiweb-138"},
+ {inets,"5.5",{[kernel,stdlib],[]},"/usr/local/lib/erlang/lib/inets-5.5"}].

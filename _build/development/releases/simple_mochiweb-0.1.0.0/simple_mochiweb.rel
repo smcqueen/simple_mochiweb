@@ -1,0 +1,9 @@
+{release,{"simple_mochiweb","0.1.0.0"},
+         {erts,"5.8"},
+         [{eunit,"2.1.5"},
+          {inets,"5.5"},
+          {kernel,"2.14.1"},
+          {mochiweb,"138"},
+          {mochiweb_app,"0.1.0"},
+          {mochiweb_otp,"0.1.0.2"},
+          {stdlib,"1.17.1"}]}.
