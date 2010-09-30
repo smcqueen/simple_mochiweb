@@ -21,8 +21,15 @@
 %% @end
 %%--------------------------------------------------------------------
 handle(Req) ->
-    Req:respond({200, [{"content_type", "text/plain"}], "Hello, Contentwatch User"}).
+    case rfc4627_jsonrpc_mochiweb:handle("/rpc", Req) of
+        no_match ->
+            handle_non_jsonrpc_request(Req);
+        {ok, Response} ->
+            Req:respond(Response)
+    end.
 
+handle_non_jsonrpc_request(Req) ->
+    Req:respond({200, [{"content_type", "text/plain"}], "Hello, Contentwatch User"}).
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
