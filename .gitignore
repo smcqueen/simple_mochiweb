@@ -1,2 +1,4 @@
 *.beam
 *.tar*
+_build/development/*
+lib/*/src/*~
