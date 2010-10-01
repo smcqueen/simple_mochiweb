@@ -4,7 +4,8 @@
   [{description, "Your Desc HERE"},
    {vsn, "0.1.0"},
    {modules, [
-		mwa_index
+		mwa_index,
+        test
               ]},
    {registered,[]},
    {applications, [kernel, stdlib, mochiweb_otp]},
