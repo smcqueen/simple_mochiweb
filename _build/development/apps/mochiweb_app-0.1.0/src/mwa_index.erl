@@ -212,9 +212,12 @@ error_response(Code, Message, ErrorValue) ->
 		   {"error", ErrorValue}]}}.
 
 build_jsonrpc_response(Id, ResultField) ->
-    {obj, [{version, <<"1.1">>},
-	   {id, Id},
-	   ResultField]}.
+    {obj, [
+           {jsonrpc, <<"2.0">>},
+           {id, Id},
+           ResultField
+          ]
+    }.
 
 expand_jsonrpc_reply(RequestId, {ResultOrError, Value}) ->
     {ResultOrError, build_jsonrpc_response(RequestId, {ResultOrError, Value}), {obj, []}};

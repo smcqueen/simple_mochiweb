@@ -27,5 +27,34 @@
 
 test1() ->
     J="{\"jsonrpc\": \"2.0\", \"method\": \"subtract\", \"params\": [42, 23], \"id\": 1}",
-    httpc:request(post, {"http://localhost:8080/rpc", [], "application/x-www-form-urlencoded", J}, [], []).
+    executeRequest(J).
+
+test2() ->
+    J="{\"jsonrpc\": \"2.0\", \"method\": \"subtract\", \"params\": [42, 23, 2], \"id\": 1}",
+    executeRequest(J).
+    
+test3() ->
+    J="{\"jsonrpc\": \"2.0\", \"method\": \"subtract\", \"params\": [42], \"id\": 1}",
+    executeRequest(J).
+    
+test4() ->
+    J="{\"jsonrpc\": \"2.0\", \"method\": \"nosubtract\", \"params\": [42, 23], \"id\": 1}",
+    executeRequest(J).
+    
+executeRequest(J) ->
+    case httpc:request(post, {"http://localhost:8080/rpc", [], "application/x-www-form-urlencoded", J}, [], []) of
+        {_StatusLine, _Headers, Body} ->
+%            io:format("StatusLine = ~p~n, Headers = ~p~n, Body = ~p~n",
+%                      [StatusLine, Headers, Body]),
+            {_,_, Response} = Body,
+            io:format("Response = ~p~n", [Response]);
+        {_StatusCode, Body} ->
+%            io:format("StatusCode = ~p~n, Body = ~p~n", [StatusCode, Body]),
+            {_,_,Response} = Body,
+            io:format("Response = ~p~n", [Response]);
+        RequestId ->
+            io:format("RequestId = ~p~n", [RequestId])
+    end.
+    
+
 
