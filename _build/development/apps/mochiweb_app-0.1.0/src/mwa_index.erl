@@ -41,6 +41,7 @@ handle(Req) ->
 			 {"remote_peername", list_to_binary(Req:get(peer))},
 			 {"scheme", <<"http">>}]},
     Body = Req:recv_body(),
+    {ok, Response} = 
     case invoke_service_method(Path, RequestInfo, Body, NewState) of
         no_match ->
             no_match;
@@ -49,7 +50,9 @@ handle(Req) ->
                 rfc4627:get_field(ResponseInfo, "http_headers", {obj, []}),
             Headers = [{K, binary_to_list(V)} || {K,V} <- ResponseHeaderFields],
             {ok, {200, Headers ++ [{"Content-type", "text/plain"}], ResultEnc}}
-    end.
+    end,
+    io:format("Response = ~p~n", [Response]),
+    Req:respond(Response).
 
 %%%===================================================================
 %%% Internal functions
@@ -127,17 +130,19 @@ invoke_service_method(Path, RequestInfo, Body, State) ->
 
 invoke_service_method(Fun, RequestId, PostOrGet, RequestInfo,
                       EndpointAddress, Method, Args, Timeout) ->
-    expand_jsonrpc_reply(
-      RequestId,
-      case catch Fun(Args) of
-        {'EXIT', {{function_clause, _}, _}} ->
-            error_response(404, "Undefined procedure", Method);
-        {'EXIT', Reason} ->
-            error_response(500, "Internal error", list_to_binary(io_lib:format("~p", [Reason])));
-        Response ->
-            Response
-      end
-    ).
+    Response = Fun(Args),
+    expand_jsonrpc_reply(RequestId, Response).
+%    expand_jsonrpc_reply(
+%      RequestId,
+%      case catch Fun(Args) of
+%        {'EXIT', {{function_clause, _}, _}} ->
+%            error_response(404, "Undefined procedure", Method);
+%        {'EXIT', Reason} ->
+%            error_response(500, "Internal error", list_to_binary(io_lib:format("~p", [Reason])));
+%        {ok, Response} ->
+%            Response
+%      end
+%    ).
 
 service_address(RequestInfo, ServiceName) ->
     HttpHeaders = rfc4627:get_field(RequestInfo, "http_headers", {obj, []}),
@@ -189,7 +194,7 @@ add_functions(State) ->
 subtract([N1, N2]) ->
     Diff = N1 - N2,
     io:format("subtract(~p, ~p) = ~p~n", [N1, N2, Diff]),
-    {ok, Diff}.
+    {result, Diff}.
 
 error_response(Code, ErrorValue) when is_integer(Code) ->
     error_response(Code, "Error "++integer_to_list(Code), ErrorValue);

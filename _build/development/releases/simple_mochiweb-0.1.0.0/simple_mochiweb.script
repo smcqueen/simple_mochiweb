@@ -1,4 +1,4 @@
-%% script generated at {2010,9,30} {21,24,24}
+%% script generated at {2010,10,1} {6,58,12}
 {script,
     {"simple_mochiweb","0.1.0.0"},
     [{preLoaded,
