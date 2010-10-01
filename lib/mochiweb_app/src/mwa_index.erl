@@ -11,6 +11,8 @@
 %% API
 -export([handle/1]).
 
+-record(state, {rcp_services}).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -21,6 +23,8 @@
 %% @end
 %%--------------------------------------------------------------------
 handle(Req) ->
+    State = #state{rcp_services = dict:new()},
+    {ok, NewState} = add_functions(State),
 %    ServiceDescriptor = rfc4627_jsonrpc:service(
 %                          {function, fun my_handler/3},
 %                          "my_handler",
@@ -37,12 +41,14 @@ handle(Req) ->
 			 {"remote_peername", list_to_binary(Req:get(peer))},
 			 {"scheme", <<"http">>}]},
     Body = Req:recv_body(),
-    case invoke_service_method(Path, RequestInfo, Body) of
+    case invoke_service_method(Path, RequestInfo, Body, NewState) of
         no_match ->
-            handle_non_jsonrpc_request(Req);
-
+            no_match;
         {ok, ResultEnc, ResponseInfo} ->
-            handle_non_jsonrpc_request(Req)
+            {obj, ResponseHeaderFields} =
+                rfc4627:get_field(ResponseInfo, "http_headers", {obj, []}),
+            Headers = [{K, binary_to_list(V)} || {K,V} <- ResponseHeaderFields],
+            {ok, {200, Headers ++ [{"Content-type", "text/plain"}], ResultEnc}}
     end.
 
 %%%===================================================================
@@ -91,10 +97,10 @@ parse_jsonrpc(Path, HttpMethod, QueryParametersObj, Body) ->
             end
     end.
 
-invoke_service_method(default, Path, RequestInfo, Body) ->
-    invoke_service_method("/jsonrpc", Path, RequestInfo, Body).
+%invoke_service_method(default, Path, RequestInfo, Body) ->
+%    invoke_service_method("/jsonrpc", Path, RequestInfo, Body).
 
-invoke_service_method(Path, RequestInfo, Body) ->
+invoke_service_method(Path, RequestInfo, Body, State) ->
     case parse_jsonrpc(Path,
 		       rfc4627:get_field(RequestInfo, "http_method", <<"GET">>),
 		       rfc4627:get_field(RequestInfo, "http_query_parameters", {obj, []}),
@@ -103,9 +109,35 @@ invoke_service_method(Path, RequestInfo, Body) ->
             no_match;
         {PostOrGet, Id, Service, Method, Args, JsonRpcVsn} ->
             io:format("GetOrPost: ~p, Id: ~p, Service: ~p, Method: ~p, Args: ~p, JsonRPCVersion: ~p~n", [PostOrGet, Id, Service, Method, Args, JsonRpcVsn]),
-            Fun = make_fun(my_handler),
-            Fun()
+            {ResultOrError, Result, ResponseInfo} =
+                case dict:find(Method, State#state.rcp_services) of
+                    error ->
+                        error_response(404, "Undefined procedure", Method);
+                    {ok, Fun} ->
+                        HttpHeaders = rfc4627:get_field(RequestInfo, "http_headers", {obj, []}),
+                        Timeout = extract_timeout_header(HttpHeaders),
+                        EndpointAddress = service_address(RequestInfo, Service),
+                        invoke_service_method(
+                          Fun, Id, PostOrGet, RequestInfo,
+                          EndpointAddress, Method, Args, Timeout)
+                end,
+            ResultEnc = lists:flatten(rfc4627:encode(Result)),
+            {ok, ResultEnc, ResponseInfo}
     end.
+
+invoke_service_method(Fun, RequestId, PostOrGet, RequestInfo,
+                      EndpointAddress, Method, Args, Timeout) ->
+    expand_jsonrpc_reply(
+      RequestId,
+      case catch Fun(Args) of
+        {'EXIT', {{function_clause, _}, _}} ->
+            error_response(404, "Undefined procedure", Method);
+        {'EXIT', Reason} ->
+            error_response(500, "Internal error", list_to_binary(io_lib:format("~p", [Reason])));
+        Response ->
+            Response
+      end
+    ).
 
 service_address(RequestInfo, ServiceName) ->
     HttpHeaders = rfc4627:get_field(RequestInfo, "http_headers", {obj, []}),
@@ -129,8 +161,57 @@ extract_timeout_header(HeadersJsonObj) ->
 	    list_to_integer(binary_to_list(Other))
     end.
 
-make_fun(my_handler) ->
-    fun my_handler/0.
+%coerce_args(_Params, Args) when is_list(Args) ->
+%    Args;
+%coerce_args(Params, {obj, Fields}) ->
+%    [case lists:keysearch(binary_to_list(Name), 1, Fields) of
+%	 {value, {_, Value}} -> coerce_value(Value, Type);
+%	 false -> null
+%     end || #service_proc_param{name = Name, type = Type} <- Params].
 
-my_handler() ->
-    io:format("my_handler()~n").
+%coerce_value(Value, _Type) when not(is_binary(Value)) ->
+%    Value;
+%coerce_value(<<"true">>, <<"bit">>) -> true;
+%coerce_value(_, <<"bit">>) -> false;
+%coerce_value(V, <<"num">>) -> list_to_integer(binary_to_list(V));
+%coerce_value(V, <<"str">>) -> V;
+%coerce_value(V, <<"arr">>) -> rfc4627:decode(V);
+%coerce_value(V, <<"obj">>) -> rfc4627:decode(V);
+%coerce_value(V, <<"any">>) -> V;
+%coerce_value(_, <<"nil">>) -> null;
+%coerce_value(V, _) -> V.
+
+add_functions(State) ->
+    FunctionMap = State#state.rcp_services,
+    NewFunctionMap = dict:store(<<"subtract">>, fun subtract/1, FunctionMap),
+    {ok, State#state{rcp_services = NewFunctionMap}}.
+
+subtract([N1, N2]) ->
+    Diff = N1 - N2,
+    io:format("subtract(~p, ~p) = ~p~n", [N1, N2, Diff]),
+    {ok, Diff}.
+
+error_response(Code, ErrorValue) when is_integer(Code) ->
+    error_response(Code, "Error "++integer_to_list(Code), ErrorValue);
+error_response(Message, ErrorValue) when is_list(Message) ->
+    error_response(500, list_to_binary(Message), ErrorValue);
+error_response(Message, ErrorValue) when is_binary(Message) ->
+    error_response(500, Message, ErrorValue).
+
+error_response(Code, Message, ErrorValue) when is_list(Message) ->
+    error_response(Code, list_to_binary(Message), ErrorValue);
+error_response(Code, Message, ErrorValue) ->
+    {error, {obj, [{"name", <<"JSONRPCError">>},
+		   {"code", Code},
+		   {"message", Message},
+		   {"error", ErrorValue}]}}.
+
+build_jsonrpc_response(Id, ResultField) ->
+    {obj, [{version, <<"1.1">>},
+	   {id, Id},
+	   ResultField]}.
+
+expand_jsonrpc_reply(RequestId, {ResultOrError, Value}) ->
+    {ResultOrError, build_jsonrpc_response(RequestId, {ResultOrError, Value}), {obj, []}};
+expand_jsonrpc_reply(RequestId, {ResultOrError, Value, ResponseInfo}) ->
+    {ResultOrError, build_jsonrpc_response(RequestId, {ResultOrError, Value}), ResponseInfo}.

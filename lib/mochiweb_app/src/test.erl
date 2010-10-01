@@ -9,7 +9,7 @@
 -module(test).
 
 %% API
--export([doTest/0]).
+-compile(export_all).
 
 %%%===================================================================
 %%% API
@@ -25,6 +25,7 @@
 %%% Internal functions
 %%%===================================================================
 
-doTest() ->
+test1() ->
     J="{\"jsonrpc\": \"2.0\", \"method\": \"subtract\", \"params\": [42, 23], \"id\": 1}",
     httpc:request(post, {"http://localhost:8080/rpc", [], "application/x-www-form-urlencoded", J}, [], []).
+
